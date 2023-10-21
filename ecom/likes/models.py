@@ -11,3 +11,4 @@ class LikedItem(models.Model):
     object_id = models.PositiveIntegerField()
     # actual object-product to be tagged
     actual_obj = GenericForeignKey()
+    
