@@ -1,11 +1,19 @@
 from django.shortcuts import render
-from django.http import HttpResponse
-from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Q  , F
-from store.models import Product
+from django.db import transaction
+from store.models import Order, OrderItem
 
+def say_hello(request): 
 
-def say_hello(request):
-    queryset = Product.objects.all()[0:2]
+    order = Order()
+    order.customer_id = 1
+    order.save()
 
-    return render(request , 'hello.html', {'products':list(queryset)})
+    item =OrderItem()
+    item.order = order
+    item.product_id = 1
+    item.quantity = 1
+    item.unit_price = 100
+    item.save()
+
+    return render(request , 'hello.html')
+

@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'store',
     "debug_toolbar",
     'likes',
+    'store_custom',
     'tag',
     'playground'
 ]
