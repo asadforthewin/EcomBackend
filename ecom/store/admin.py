@@ -3,7 +3,6 @@ from django.contrib import admin,messages
 from django.contrib.contenttypes.admin import GenericTabularInline
 from django.db.models import Count
 from django.db.models import QuerySet
-from django.http.request import HttpRequest
 from django.utils.html import format_html, urlencode
 from django.urls import reverse
 
@@ -29,10 +28,6 @@ class InventoryFilter(admin.SimpleListFilter):
           return queryset.filter(price__gt=40)
    
 
-
-class TagInline(GenericTabularInline):
-   autocomplete_fields = ['tag']
-   model = TaggedItem
    
  
 # PRODUCT CLASS
@@ -40,7 +35,6 @@ class TagInline(GenericTabularInline):
 class ProductAdmin(admin.ModelAdmin):
    autocomplete_fields = ['collection']
    actions = ['clear_inventory'] #action in the product model list page
-   inlines = [TagInline]
    list_display= ['title' , 'unit_price', 'inventory_status','collection_title'] #lists to be displayed
 #    on product list page
    list_editable = ['unit_price'] #unit price is editable on list page 
