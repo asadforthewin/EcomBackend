@@ -28,7 +28,7 @@ class Product(models.Model):
         validators=[MinValueValidator(1, message="Enter a value greater than 1")])
     inventory = models.IntegerField()
     last_update = models.DateTimeField(auto_now=True)
-    collection = models.ForeignKey(Collection, on_delete=models.PROTECT)
+    collection = models.ForeignKey(Collection, on_delete=models.PROTECT, related_name='collectionset')
     promotions = models.ManyToManyField(Promotion, blank=True)
 
     def __str__(self) -> str:
@@ -89,7 +89,7 @@ class CartItem(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.PROTECT)
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name='orderitems')
     quantity = models.PositiveSmallIntegerField()
     unit_price = models.DecimalField(max_digits=4, decimal_places=2)
 
@@ -98,3 +98,10 @@ class Address(models.Model):
     street = models.CharField(max_length=255)
     city = models.CharField(max_length=255)
     customer = models.ForeignKey(Customer , on_delete=models.CASCADE)
+
+
+class Review(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_query_name='reviews')
+    name = models.CharField(max_length=255)
+    desccription = models.TextField()
+    date = models.DateField(auto_now_add=True)
