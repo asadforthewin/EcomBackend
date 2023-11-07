@@ -1,5 +1,8 @@
 from django.db import models
+from django.conf import settings
 from django.core.validators import MinValueValidator
+from django.contrib import admin
+from uuid import uuid4
 
 
 
@@ -27,7 +30,7 @@ class Product(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(1, message="Enter a value greater than 1")])
     inventory = models.IntegerField()
-    last_update = models.DateTimeField(auto_now=True)
+    last_update = models.DateTimeField(auto_now=True) 
     collection = models.ForeignKey(Collection, on_delete=models.PROTECT, related_name='collectionset')
     promotions = models.ManyToManyField(Promotion, blank=True)
 
@@ -47,19 +50,26 @@ class Customer(models.Model):
         (MEMEBERSHIP_SILVER, 'Silver'),
         (MEMEBERSHIP_GOLD, 'GOLD')
     ]
-    first_name = models.CharField(max_length=255)
-    last_name  = models.CharField(max_length=255)
-    email = models.EmailField(unique=True)
+    # first_name = models.CharField(max_length=255) No need for them as user have all these fields now 
+    # last_name  = models.CharField(max_length=255) 
+    # email = models.EmailField(unique=True)
     phone = models.CharField(max_length=255)
     birth_date = models.DateField(null = True)
-
     membership = models.CharField(max_length=1, choices=MEMERSHIP, default=MEMEBERSHIP_BRONZE)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
      
     def __str__(self) -> str:
-        return f'{self.first_name} {self.last_name}'
+        return f'{self.user.first_name} {self.user.last_name}' #adding user to firstand last name as these are user related
     
+    @admin.display(ordering='user__first_name')
+    def first_name(self):
+        return self.user.first_name
+    
+    @admin.display(ordering='user__last_name')
+    def last_name(self):
+        return self.user.last_name
     class Meta:
-        ordering = ['first_name','last_name']
+        ordering = ['user__first_name','user__last_name'] #also here adding user 
  
 
 class Order(models.Model):
@@ -76,15 +86,27 @@ class Order(models.Model):
     payment_status = models.CharField(max_length=1, choices=PAYMENT, default=PAYMENT_PENDING)
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT)
 
+
+    class Meta:
+        permissions = [
+
+            ('cancel_order' , ' Can Cancel Order ') #tuple with codename first and then readable name 
+            #codename is stored in auth-permissions table
+        ]
+
    
 
 class Cart(models.Model):
+    id = models.UUIDField(primary_key=True , default=uuid4)
     created_at = models.DateTimeField(auto_now_add=True)
 
-class CartItem(models.Model):
-    cart = models.ForeignKey(Cart , on_delete=models.CASCADE)
+class CartItem(models.Model): 
+    cart = models.ForeignKey(Cart , on_delete=models.CASCADE, related_name='cartitems')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.PositiveSmallIntegerField()
+    quantity = models.PositiveSmallIntegerField(validators=[MinValueValidator(1)])
+
+    class Meta:
+        unique_together = [['cart', 'product']]
 
 
 class OrderItem(models.Model):
@@ -103,5 +125,5 @@ class Address(models.Model):
 class Review(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_query_name='reviews')
     name = models.CharField(max_length=255)
-    desccription = models.TextField()
+    description = models.TextField()
     date = models.DateField(auto_now_add=True)

@@ -1,13 +1,19 @@
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
+from rest_framework.mixins import CreateModelMixin,RetrieveModelMixin, DestroyModelMixin
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
-from rest_framework.viewsets import ModelViewSet
-from .models import Product, Collection, OrderItem, Review
-from .serializers import ProductSerializer, COllectionSerializer, ReviewSerializer
+from rest_framework.viewsets import ModelViewSet, GenericViewSet
+from rest_framework.filters import SearchFilter , OrderingFilter
+from .models import Product, Collection, OrderItem, Review, Cart, CartItem
+from .filters import ProductFilter
+from .serializers import ProductSerializer, COllectionSerializer, ReviewSerializer 
+from. serializers import CartSerialzer ,CartItemSerializer, AddCartItemSerializer, UpdateCartItemSerializer
+from .pagination import DefaultPagination
 
 
 # 1 Product List
@@ -150,11 +156,20 @@ class ProductDetail(RetrieveUpdateDestroyAPIView):
 # FOR BOTH ProductDetail and ProductList
 
 class ProductViewSet(ModelViewSet):
-    queryset = Product.objects.all( )
+    # queryset = Product.objects.all( ) #cant apply filter to a queryset so for filtering get to method
+
+
+    queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    def get_serializer_context(self):
-        return {'request': self.request}
-    
+
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter] #gives us generic filtering, an array of DFB
+    # filterset_fields = ['collection_id'] #giving the fields that are to be filtered
+        #after the filtering, we can completely remove the bellow logic for filtering and bring ack queryset
+    #refering the filter we created in filters.py 
+    filterset_class = ProductFilter
+    search_fields = ['title', 'description']
+    ordering_fields = ['unit_price', 'last_update']
+    pagination_class= DefaultPagination
 
     def destroy(self, request, *args, **kwargs): #method from the base class ModelViewSet 
         # filtering the order items via their PK whose Count is greater than 0
@@ -162,10 +177,38 @@ class ProductViewSet(ModelViewSet):
             return Response({'Error':'You cant delete this product'},status=status.HTTP_405_METHOD_NOT_ALLOWED)
         # if not we are good to delete the product
         return super().destroy(request, *args, **kwargs)
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+ 
+
+'''
+    def get_queryset(self):
+        queryset = Product.objects.all()
+        if our url is /store/products, this is not going to work so we have to use get method, get
+        give us none if the required value is not there so no exception
+        # collection_id = self.request.query_params['collection_id']
+        collection_id = self.request.query_params.get('collection_id')
+         
+        if collection_id is not None:
+            queryset= queryset.filter(collection_id= collection_id)
+
+        return queryset
+        query_params give us the dictionary but what we dont have collection id this method is not going to work
+        as above is the corrcet implementation
+        # Product.objects.filter(collection_id =self.request.query_params['collection_id']
+'''
+
+
+
+    
+    
     
 
 # with destroy method implementation we dont need the delete method which was from base class RetriveUpdateDestroyAPIview 
 '''
+
     def delete(self,pk):  
         product = get_object_or_404(Product, pk=pk)
         if product.orderitems.count() >0: 
@@ -173,7 +216,7 @@ class ProductViewSet(ModelViewSet):
         else:
             product.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-'''
+ '''
 
 
     
@@ -322,5 +365,50 @@ class CollectionViewSet(ModelViewSet):
 
 
 class ReviewViewSet(ModelViewSet):
-    queryset = Review.objects.all() #all the objects/products 
+    # we cant apply the self.kwargs on queryset so switching back to get_queryset method
+    # queryset = Review.objects.all() #all the objects/products 
+
+
+    def get_queryset(self):
+        return Review.objects.filter(product_id = self.kwargs['product_pk'])
+    
+    
     serializer_class = ReviewSerializer
+
+    ''' This viewset class have access to url parameters so it can read the id from the url and using a context object pass
+it to a serializer
+'''
+    def get_serializer_context(self):
+#self.kwargs is a dictionary that contains url parameters, url has 2 parameters product_pk and pk
+        return {'product_id': self.kwargs['product_pk']} 
+    #now back to reviewSerializer to override the create method 
+
+
+
+class CartViewSet(CreateModelMixin, RetrieveModelMixin,DestroyModelMixin,GenericViewSet):
+    #A cart can have multiple items, loading cartitems and then the products in the items
+    queryset = Cart.objects.prefetch_related('cartitems__product').all()
+    serializer_class = CartSerialzer
+
+
+class CartItemViewset(ModelViewSet):
+    #we dont want to retrieve all items, but filter by cart_id so we override get_queryset method
+    # queryset = CartItem.objects.all()
+    # serializer_class = CartItemSerializer #no hard code but dynamically return the serializer based on request
+
+    http_method_names = ['get','post','patch','delete']
+
+    def get_serializer_class(self):
+        if self.request.method =='POST':
+            return AddCartItemSerializer
+        elif self.request.method == 'PATCH':
+            return UpdateCartItemSerializer
+        return CartItemSerializer
+    
+    def get_serializer_context(self):
+        return {'cart_id': self.kwargs['cart_pk']}
+
+    def get_queryset(self):
+        #extract cart id as url parameter
+        return CartItem.objects.select_related('product'). filter(cart_id = self.kwargs['cart_pk'])
+    

@@ -38,13 +38,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'rest_framework',
-    'rest_framework_nested',
+    'django_filters',
     'store',
     "debug_toolbar",
     'likes',
-    'store_custom',
     'tag',
-    'playground'
+    'playground',
+    'core'
 ]
 
 MIDDLEWARE = [
@@ -144,3 +144,5 @@ REST_FRAMEWORK = {
 
     'COERCE_DECIMAL_TO_STRING':False 
 }
+
+AUTH_USER_MODEL = 'core.User'

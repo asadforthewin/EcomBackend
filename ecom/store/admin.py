@@ -87,7 +87,7 @@ class CollectionAdmin(admin.ModelAdmin):
      
    
    def get_queryset(self, request):
-    return super().get_queryset(request). annotate(products_count = Count('products'))
+    return super().get_queryset(request). annotate(products_count = Count('collectionset'))
       
 
 
@@ -99,6 +99,8 @@ class CustomerAdmin(admin.ModelAdmin):
    list_editable = ['membership']
    list_per_page = 10
    search_fields = ['customer']
+   list_select_related = ['user']
+   ordering = ['user__first_name' , 'user__last_name']
 
    @admin.display(ordering= 'orders')
    def orders(self,customer):

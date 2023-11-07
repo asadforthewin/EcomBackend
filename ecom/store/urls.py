@@ -1,12 +1,31 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
+from rest_framework_nested import routers
 from .  import views
 
-router = DefaultRouter()
-router.register('products', views.ProductViewSet)
-router.register('collections', views.CollectionViewSet)
 
-urlpatterns = router.urls
+router = routers.DefaultRouter()
+router.register('products', views.ProductViewSet, basename='products')
+router.register('collections', views.CollectionViewSet)
+router.register ('carts', views.CartViewSet)
+
+
+products_router = routers.NestedSimpleRouter(router, 'products' , lookup='product')
+products_router.register('reviews',views.ReviewViewSet , basename='product-reviews' )
+
+cart_router = routers.NestedDefaultRouter(router, 'carts' , lookup='cart') #once we set to 'cart' we have a 
+#lookup parameter= cart_pk that how we extracted it in CartitemViewSet metho get_queryset
+cart_router.register('items', views.CartItemViewset, basename='cart-items')
+
+
+urlpatterns = router.urls + products_router.urls + cart_router.urls
+
+
+
+
+
+
+
  
 
 # urlpatterns = [ 
