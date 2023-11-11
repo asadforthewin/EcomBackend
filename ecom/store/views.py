@@ -4,16 +4,19 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.views import APIView
-from rest_framework.mixins import CreateModelMixin,RetrieveModelMixin, DestroyModelMixin
+from rest_framework.mixins import CreateModelMixin,RetrieveModelMixin, DestroyModelMixin, UpdateModelMixin
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
 from rest_framework.filters import SearchFilter , OrderingFilter
-from .models import Product, Collection, OrderItem, Review, Cart, CartItem
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from .models import Product, Collection, OrderItem, Review, Cart, CartItem,  Customer
 from .filters import ProductFilter
 from .serializers import ProductSerializer, COllectionSerializer, ReviewSerializer 
-from. serializers import CartSerialzer ,CartItemSerializer, AddCartItemSerializer, UpdateCartItemSerializer
+from. serializers import CartSerialzer ,CartItemSerializer, AddCartItemSerializer, UpdateCartItemSerializer , CustomerSerializer
 from .pagination import DefaultPagination
+from .permissions import IsAdminOrReadOnly
 
 
 # 1 Product List
@@ -161,7 +164,7 @@ class ProductViewSet(ModelViewSet):
 
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-
+    permission_classes = [IsAdminOrReadOnly]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter] #gives us generic filtering, an array of DFB
     # filterset_fields = ['collection_id'] #giving the fields that are to be filtered
         #after the filtering, we can completely remove the bellow logic for filtering and bring ack queryset
@@ -344,6 +347,7 @@ class CollectionViewSet(ModelViewSet):
     queryset = Collection.objects.annotate(products_count= Count('collectionset')). all()
     
     serializer_class = COllectionSerializer
+    permission_classes = [IsAdminOrReadOnly]
 
 
 
@@ -412,3 +416,33 @@ class CartItemViewset(ModelViewSet):
         #extract cart id as url parameter
         return CartItem.objects.select_related('product'). filter(cart_id = self.kwargs['cart_pk'])
     
+
+
+class CustomerViewSet(ModelViewSet):
+
+    queryset = Customer.objects.all()
+    serializer_class = CustomerSerializer
+    permission_classes = [IsAdminUser]
+    # permission_classes = [IsAuthenticated] #a list bcz we can supply multiple classes here,and if any ot them fails
+    # the client would not be able to access this view
+
+    # def get_permissions(self): #a method that is available in this viewset
+    #     if self.request.method == 'GET':
+    #         return [AllowAny()]
+    #     return [IsAuthenticated()]
+
+
+    @action(detail=False, methods=['GET', 'PUT'], permission_classes=[IsAuthenticated]) #detail is false means the action is on list view
+    def me(self, request): #middleware has auth middleware , and jwt contains the userid in payload
+        #get_or_create gives a tuple obj with 2 values, one is id and other is a boolean (3,f) like this
+        (customer, create) = Customer.objects.get_or_create(user_id = request.user.id)
+        if request.method =='GET':
+            serializer = CustomerSerializer(customer)
+            return Response(serializer.data)
+        
+        elif request.method == 'PUT':
+            serializer = CustomerSerializer(customer, data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)       
+        

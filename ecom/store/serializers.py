@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
-from .models import Product, Collection,Review, Cart, CartItem
+from .models import Product, Collection,Review, Cart, CartItem, Customer
 from django.db.models import Count
 
 
@@ -125,6 +125,13 @@ class UpdateCartItemSerializer(serializers.Serializer):
         model = CartItem
         fields = ['quantity']
 
+
+class CustomerSerializer(serializers.ModelSerializer):
+
+    user_id = serializers.IntegerField(read_only = True)
+    class Meta:
+        model = Customer
+        fields = ['id', 'user_id' , 'birth_date', 'phone', 'membership']
 
 
     

@@ -22,7 +22,7 @@ class InventoryFilter(admin.SimpleListFilter):
       ]
    
    def queryset(self, request: Any, queryset: QuerySet[Any]) -> QuerySet[Any] | None:
-       if self.value == 'a':
+       if self.value == 'a': #self.value returns the selected filter 
         return queryset.filter(price__lt=40)
        elif self.value == 'b':
           return queryset.filter(price__gt=40)
