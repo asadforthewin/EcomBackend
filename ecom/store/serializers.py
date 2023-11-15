@@ -1,7 +1,9 @@
+from django.db import transaction
 from rest_framework import serializers
 from decimal import Decimal
-from .models import Product, Collection,Review, Cart, CartItem, Customer
+from .models import Product, Collection,Review, Cart, CartItem, Customer, OrderItem, Order
 from django.db.models import Count
+from store.signals import order_created
 
 
 class COllectionSerializer(serializers.ModelSerializer):
@@ -134,4 +136,66 @@ class CustomerSerializer(serializers.ModelSerializer):
         fields = ['id', 'user_id' , 'birth_date', 'phone', 'membership']
 
 
+class OrderItemSerializer(serializers.ModelSerializer):
+    product = SimpleProductSerializer()
+    class Meta:
+        model = OrderItem
+        fields = ['id' , 'product', 'unit_price', 'quantity']
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many = True)
+    class Meta:
+        model = Order
+        fields = ['id', 'customer', 'payment_status' , 'placed_at',  'items' ]
+
+
+class CreateOrderSerializer(serializers.Serializer):
+    cart_id = serializers.UUIDField()
+
+    def validate_cart_id(self, cart_id):
+        if not Cart.objects.filter(pk=cart_id).exists():
+            raise serializers.ValidationError('No cart with given id was found')
+        if CartItem.objects.filter(cart_id=cart_id).count() ==0:
+            raise serializers.ValidationError('The cart is empty')
+        return cart_id
+
+
+
+    def save(self, **kwargs):
+        with transaction.atomic():
+            # print(self.validated_data['cart_id'])
+            # print(self.context['user_id'])
+            cart_id = self.validated_data['cart_id']
+            '''The save method here is not violating the command query separation ,as the save method is there
+            to change the state of the system'''
+            # (customer,created) =  Customer.objects.get_or_create(user_id = self.context['user_id']) creating an order
+            customer =  Customer.objects.get(user_id = self.context['user_id']) #CQSP
+            order = Order.objects.create(customer= customer)
+
+            cart_items = CartItem.objects.select_related('product').filter(cart_id= cart_id) #creating cartitems
+            '''List comprehension to convert the cart-items to orderitems, Creating Order items'''
+            order_items = [ 
+                OrderItem(
+                    order=order,
+                    product= item.product,
+                    unit_price= item.product.unit_price,
+                    quantity= item.quantity
+                ) for item in cart_items
+            ]
+
+            OrderItem.objects.bulk_create(order_items) #saving the order items in bulk to db
+            Cart.objects.filter(pk=cart_id).delete() #deleting the cart after order has been created
+            '''So when the database server goes offline in the middle of all this, we dont want this process to be stuck
+            in the middle thats where we use transactions, so when one step fails all the process roll back to previous
+            state'''
+
+            order_created.send_robust(self.__class__, order=order )
+
+            return order
+        
+class UpdateOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = ['payment_status']
+        
     

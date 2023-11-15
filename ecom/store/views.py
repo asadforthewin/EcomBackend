@@ -10,13 +10,14 @@ from rest_framework.mixins import CreateModelMixin,RetrieveModelMixin, DestroyMo
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
 from rest_framework.filters import SearchFilter , OrderingFilter
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
-from .models import Product, Collection, OrderItem, Review, Cart, CartItem,  Customer
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser , DjangoModelPermissions
+from .models import Product, Collection, OrderItem, Review, Cart, CartItem,  Customer, Order
 from .filters import ProductFilter
-from .serializers import ProductSerializer, COllectionSerializer, ReviewSerializer 
+from .serializers import ProductSerializer, COllectionSerializer, ReviewSerializer , OrderSerializer, CreateOrderSerializer
 from. serializers import CartSerialzer ,CartItemSerializer, AddCartItemSerializer, UpdateCartItemSerializer , CustomerSerializer
+from .serializers import UpdateOrderSerializer
 from .pagination import DefaultPagination
-from .permissions import IsAdminOrReadOnly
+from .permissions import IsAdminOrReadOnly , ViewCustomerHistory
 
 
 # 1 Product List
@@ -432,10 +433,15 @@ class CustomerViewSet(ModelViewSet):
     #     return [IsAuthenticated()]
 
 
+
+    '''The 'me' is the endpoint like customers/me, so whenever its called the me method is executed 
+        '''
     @action(detail=False, methods=['GET', 'PUT'], permission_classes=[IsAuthenticated]) #detail is false means the action is on list view
+    
     def me(self, request): #middleware has auth middleware , and jwt contains the userid in payload
         #get_or_create gives a tuple obj with 2 values, one is id and other is a boolean (3,f) like this
-        (customer, create) = Customer.objects.get_or_create(user_id = request.user.id)
+        # (customer, create) = Customer.objects.get_or_create(user_id = request.user.id)  CQS
+        customer = Customer.objects.get(user_id = request.user.id) 
         if request.method =='GET':
             serializer = CustomerSerializer(customer)
             return Response(serializer.data)
@@ -446,3 +452,51 @@ class CustomerViewSet(ModelViewSet):
             serializer.save()
             return Response(serializer.data)       
         
+    @action(detail=True , permission_classes=[ViewCustomerHistory])
+    def history(self,request, pk): #pk for a particular customer
+        return Response('ok')
+
+
+class OrderViewset(ModelViewSet):
+    # queryset = Order.objects.all() to apply perm so only staff user can access all orders we override queryset
+    # serializer_class= OrderSerializer no need to hardcode as we override it 
+    # permission_classes = [IsAuthenticated] dont need them as we are overiding the perm method below 
+    http_method_names = ['get' ,'post', 'patch', 'delete' , 'head', 'options']
+
+
+    def get_permissions(self):
+        if self.request.method in ['PATCH', 'DELETE']:
+            return [IsAdminUser()]
+        return [IsAuthenticated()]
+
+
+    def create(self, request, *args, **kwargs): #overriding create method of CreateModelMixin for cart to return order objs
+        serializer = CreateOrderSerializer(data=request.data, context={'user_id' : self.request.user.id})
+        serializer.is_valid(raise_exception=True)
+        order = serializer.save()
+        serializer = OrderSerializer(order)
+        return Response(serializer.data)
+
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return Order.objects.all()
+        else:      
+            '''Here we are retrieving the order id of specific customers, so in JWT we cant get customerid 
+            so we need to retrieve it from the user id, so if a user dont have an ID'''  
+            # Customer.objects.get(user_id = self.request.user.id) #retrieve a whole cus obj but we only need cus ID so 
+            # customer_id = Customer.objects.only('id').get(user_id = self.request.user.id) #only getting the userid
+            # (customer_id, created) = Customer.objects.only('id').get_or_create(user_id = self.request.user.id) #only getting the userid
+            '''Since we are listening to the post_save signal so we no longer have the CQSP violation, as we can 
+            remove get_or_create and replace it with get only anywhere in this class'''
+            customer_id = Customer.objects.only('id').get(user_id = self.request.user.id)           
+            return Order.objects.filter(customer_id=customer_id )
+
+    # def get_serializer_context(self): retrieving the user id 
+    #     return {'user_id' : self.request.user.id} as we are not implementing the createmodelmixin method we are overriding it
+    
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return CreateOrderSerializer
+        elif self.request.method == 'PATCH':
+            return UpdateOrderSerializer
+        return OrderSerializer
